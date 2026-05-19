@@ -5,7 +5,7 @@ A minimal, runnable real-time voice agent in Python. Microphone in, speaker out,
 **Stack**
 
 - **Voice Agent API:** AssemblyAI (one WebSocket = STT + LLM + TTS + turn detection + tool calling)
-- **Audio:** PyAudio (16kHz PCM in and out)
+- **Audio:** PyAudio (24kHz PCM in and out — the Voice Agent API default)
 - **Tools:** Example `get_weather`, `remember`, `recall_memory`
 
 **~200 lines of Python.** Fork it, swap the tools, ship it.
@@ -73,13 +73,13 @@ Ctrl+C to exit.
 ## How it works
 
 ```
-  mic.read() ──► audio.input event ──► Voice Agent API
+  mic.read() ──► input.audio event ──► Voice Agent API
                                           │
                               ┌───────────┴───────────┐
                               │ STT → LLM + tools → TTS │
                               └───────────┬───────────┘
                                           │
-  speaker.play() ◄── audio.output event ──┤
+  speaker.play() ◄── reply.audio event ──┤
                                           │
   dispatch_tool() ◄── tool.call event ────┤
                                           │
@@ -88,8 +88,8 @@ Ctrl+C to exit.
 
 Two coroutines run concurrently:
 
-1. **send_audio** — pulls chunks from the mic queue and ships them as `audio.input` events
-2. **receive_events** — reads events from the WebSocket and routes them: `audio.output` → speaker, `tool.call` → dispatcher → `tool.result`, transcripts → stdout
+1. **send_audio** — waits for `session.ready`, then pulls chunks from the mic queue and ships them as `input.audio` events
+2. **receive_events** — reads events from the WebSocket and routes them: `reply.audio` → speaker, `tool.call` → dispatcher (accumulated, then flushed on `reply.done`), transcripts → stdout
 
 ---
 
@@ -99,6 +99,7 @@ Edit `tools.py`. Add a JSON schema to `TOOLS`:
 
 ```python
 {
+    "type": "function",
     "name": "create_ticket",
     "description": "Create a support ticket.",
     "parameters": {
@@ -131,9 +132,9 @@ Typical end-to-end perceived latency on this stack: **450–950ms** from when yo
 
 To stay under 500ms:
 
-- Keep mic chunks small (200ms or less — the default in `audio.py`)
+- Keep mic chunks small (50ms — the default in `audio.py`, per docs recommendation)
 - Never block in `dispatch_tool`. If a tool needs more than 500ms, cache or pre-compute, or return a stall ("Let me check on that") while the real call resolves
-- Play `audio.output` chunks as they arrive — never buffer the full reply
+- Play `reply.audio` chunks as they arrive — never buffer the full reply
 
 ---
 

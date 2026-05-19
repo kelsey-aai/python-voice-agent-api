@@ -1,12 +1,17 @@
-"""PyAudio wrappers for the mic and speaker."""
+"""PyAudio wrappers for the mic and speaker.
+
+Default Voice Agent API audio encoding is `audio/pcm`: 16-bit signed
+little-endian PCM at 24 kHz, mono. See:
+https://www.assemblyai.com/docs/voice-agents/voice-agent-api/audio-format
+"""
 
 import threading
 from queue import Queue
 
 import pyaudio
 
-SAMPLE_RATE = 16000
-CHUNK_SIZE = 3200  # 200ms at 16kHz 16-bit
+SAMPLE_RATE = 24000
+CHUNK_SIZE = 1200  # 50ms at 24kHz 16-bit mono — per docs recommendation
 
 
 class Mic:
@@ -57,8 +62,12 @@ class Speaker:
     def play(self, audio_bytes: bytes):
         self._stream.write(audio_bytes)
 
-    def flush(self):
-        # Best-effort interruption: stop and reopen the stream.
+    def flush_and_restart(self):
+        """Discard any queued playback and reopen the stream.
+
+        Called when the agent is interrupted (barge-in) so the user doesn't
+        keep hearing stale speech after they've started talking.
+        """
         try:
             self._stream.stop_stream()
             self._stream.close()

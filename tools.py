@@ -8,6 +8,7 @@ import json
 
 TOOLS = [
     {
+        "type": "function",
         "name": "get_weather",
         "description": "Get the current weather for a city.",
         "parameters": {
@@ -19,6 +20,7 @@ TOOLS = [
         },
     },
     {
+        "type": "function",
         "name": "remember",
         "description": "Save something the user wants you to remember.",
         "parameters": {
@@ -30,6 +32,7 @@ TOOLS = [
         },
     },
     {
+        "type": "function",
         "name": "recall_memory",
         "description": "List things the user has asked you to remember.",
         "parameters": {"type": "object", "properties": {}},

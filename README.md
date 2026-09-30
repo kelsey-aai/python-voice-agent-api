@@ -4,7 +4,7 @@ A minimal, runnable real-time voice agent in Python. Microphone in, speaker out,
 
 **Stack**
 
-- **Voice Agent API:** AssemblyAI (one WebSocket = STT + LLM + TTS + turn detection + tool calling)
+- **Voice Agent API:** AssemblyAI (one WebSocket = STT + LLM + TTS + turn detection + tool calling). The STT foundation is Universal-3.6 Pro Realtime.
 - **Audio:** PyAudio (24kHz PCM in and out — the Voice Agent API default)
 - **Tools:** Example `get_weather`, `remember`, `recall_memory`
 

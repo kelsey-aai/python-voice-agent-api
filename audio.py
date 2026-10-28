@@ -1,51 +1,41 @@
-"""PyAudio wrappers for the mic and speaker.
-
-Default Voice Agent API audio encoding is `audio/pcm`: 16-bit signed
-little-endian PCM at 24 kHz, mono. See:
-https://www.assemblyai.com/docs/voice-agents/voice-agent-api/audio-format
-"""
-
+# audio.py
 import threading
 from queue import Queue
 
 import pyaudio
 
-SAMPLE_RATE = 24000
-CHUNK_SIZE = 1200  # 50ms at 24kHz 16-bit mono — per docs recommendation
+MIC_RATE = 16000      # what we send to speech-to-text
+SPEAKER_RATE = 24000  # what AssemblyAI text-to-speech sends back
+MIC_CHUNK = 800       # 50 ms of 16 kHz, 16-bit mono audio
 
 
 class Mic:
     def __init__(self):
         self._pa = pyaudio.PyAudio()
-        self._stream = None
-        self.queue: Queue[bytes] = Queue()
+        self.queue = Queue()
         self._running = False
 
     def start(self):
         self._running = True
         self._stream = self._pa.open(
-            format=pyaudio.paInt16,
-            channels=1,
-            rate=SAMPLE_RATE,
-            input=True,
-            frames_per_buffer=CHUNK_SIZE,
+            format=pyaudio.paInt16, channels=1, rate=MIC_RATE,
+            input=True, frames_per_buffer=MIC_CHUNK,
         )
         threading.Thread(target=self._loop, daemon=True).start()
 
     def _loop(self):
         while self._running:
-            try:
-                self.queue.put(
-                    self._stream.read(CHUNK_SIZE, exception_on_overflow=False)
-                )
-            except Exception:
-                break
+            self.queue.put(self._stream.read(MIC_CHUNK, exception_on_overflow=False))
+
+    def chunks(self):
+        # A generator the streaming client can consume directly
+        while self._running:
+            yield self.queue.get()
 
     def stop(self):
         self._running = False
-        if self._stream:
-            self._stream.stop_stream()
-            self._stream.close()
+        self._stream.stop_stream()
+        self._stream.close()
         self._pa.terminate()
 
 
@@ -53,37 +43,14 @@ class Speaker:
     def __init__(self):
         self._pa = pyaudio.PyAudio()
         self._stream = self._pa.open(
-            format=pyaudio.paInt16,
-            channels=1,
-            rate=SAMPLE_RATE,
-            output=True,
+            format=pyaudio.paInt16, channels=1, rate=SPEAKER_RATE, output=True,
         )
 
-    def play(self, audio_bytes: bytes):
+    def play(self, audio_bytes):
+        # Blocks for roughly the length of the chunk, so playback paces itself
         self._stream.write(audio_bytes)
 
-    def flush_and_restart(self):
-        """Discard any queued playback and reopen the stream.
-
-        Called when the agent is interrupted (barge-in) so the user doesn't
-        keep hearing stale speech after they've started talking.
-        """
-        try:
-            self._stream.stop_stream()
-            self._stream.close()
-        except Exception:
-            pass
-        self._stream = self._pa.open(
-            format=pyaudio.paInt16,
-            channels=1,
-            rate=SAMPLE_RATE,
-            output=True,
-        )
-
     def close(self):
-        try:
-            self._stream.stop_stream()
-            self._stream.close()
-        except Exception:
-            pass
+        self._stream.stop_stream()
+        self._stream.close()
         self._pa.terminate()
